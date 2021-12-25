@@ -107,6 +107,8 @@ def lookup_file_line(frame: gdb.Frame, pos_list: List[FileLine]) -> Optional[Fil
 
 
 def thread_position(thread: gdb.InferiorThread, pos_list: List[FileLine]) -> Tuple[Position, int]:
+    if not thread.is_valid():
+        return Position(None, 0), 0
     thread.switch()
     ans = None
     frame = gdb.newest_frame()

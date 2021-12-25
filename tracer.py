@@ -159,10 +159,10 @@ class Tracer:
         except TimeoutError:
             info.position, _ = thread_position(info.thread, self.positions)
             return False
-        if not info.thread.is_valid():
-            return False
 
         while True:
+            if not info.thread.is_valid():
+                return False
             pos, level = thread_position(info.thread, self.positions)
             if pos.at_line_begin():
                 info.position = pos
@@ -178,12 +178,12 @@ class Tracer:
 
             # move out
             for cmd in cmds:
+                if not info.thread.is_valid():
+                    return False
                 try:
                     gdb_execute_timeout(cmd, self.step_timeout)
                 except TimeoutError:
                     info.position, _ = thread_position(info.thread, self.positions)
-                    return False
-                if not info.thread.is_valid():
                     return False
 
 
