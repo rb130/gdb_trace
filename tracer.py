@@ -206,7 +206,7 @@ def main():
     config_path = os.environ["TRACE_CONFIG"]
     tracer, log = from_config(config_path)
     tracer.start()
-    tracer.update_log(log)
+    # tracer.update_log(log)
     while tracer.step():
         tracer.update_log(log)
     log.close()
