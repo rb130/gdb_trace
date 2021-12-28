@@ -23,7 +23,8 @@ if __name__ == "__main__":
 
     environ = os.environ.copy()
     environ["TRACE_CONFIG"] = os.path.abspath(config_path)
-    environ["PYTHONPATH"] = curdir + ":" + os.getenv("PYTHONPATH", "")
+    environ["PYTHONPATH"] = ':'.join([curdir, os.path.join(curdir, "gdb_utils")]) \
+        + os.getenv("PYTHONPATH", "")
 
     try:
         proc = subprocess.Popen(["gdb", "-q", "-nx", "--readnow", "-x", tracer_path],

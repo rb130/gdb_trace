@@ -1,4 +1,5 @@
 from __future__ import annotations
+from enum import Enum
 from typing import List, Set, Tuple
 import gdb
 import os
@@ -30,6 +31,12 @@ class FileLine:
         srcdir = os.path.abspath(srcdir)
         rpath = pathlib.Path(self.filename).relative_to(srcdir)
         return "%s:%d" % (rpath, self.line)
+
+
+class LineLoc(Enum):
+    Before = "="
+    Middle = ">"
+    After = "-"
 
 
 def file_in_folder(filename, dirname):
@@ -119,3 +126,26 @@ def thread_position(thread: gdb.InferiorThread, pos_list: List[FileLine]) -> Tup
         frame = frame.older()
         level += 1
     return Position(ans, pc), level
+
+
+log_pattern = re.compile(r"(\d+) ([=>]) (None|(.*):(\d+))\s*")
+
+
+class ThreadPos:
+    def __init__(self, tid: int, line_loc: LineLoc, file_line: Optional[FileLine]):
+        self.tid = tid
+        self.line_loc = line_loc
+        self.file_line = file_line
+
+
+def parse_log_line(line: str) -> Optional[ThreadPos]:
+    match = log_pattern.match(line)
+    if match is None:
+        return None
+    tid = int(match.group(1))
+    line_loc = LineLoc(match.group(2))
+    if match.group(3) == "None":
+        file_line = None
+    else:
+        file_line = FileLine(match.group(4), int(match.group(5)))
+    return ThreadPos(tid, line_loc, file_line)

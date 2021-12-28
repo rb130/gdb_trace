@@ -1,0 +1,3 @@
+[submodule "gdb_utils"]
+	path = gdb_utils
+	url = https://github.com/rb130/gdb_utils

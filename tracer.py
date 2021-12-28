@@ -189,7 +189,7 @@ class Tracer:
 
 def from_config(config_path):
     with open(config_path) as f:
-        config: Dict = json.load(f)
+        config = json.load(f)
     cmd = config["cmd"]
     srcdir = config["srcdir"]
     step_timeout = config.get("steptime", 1.0)
