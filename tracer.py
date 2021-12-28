@@ -109,13 +109,14 @@ class Tracer:
     def update_log(self, log):
         info = self.last_thread_info
         if not info.thread.is_valid():
-            begin = '>'
+            line_loc = LineLoc.Middle
             file_line = None
         else:
             pos = info.position
-            begin = '=' if pos.at_line_begin() else '>'
-            file_line = None if pos.file_line is None else pos.file_line.to_str(self.srcdir)
-        log.write("%d %s %s\n" % (info.num, begin, file_line))
+            line_loc = LineLoc.Before if pos.at_line_begin() else LineLoc.Middle
+            file_line = None if pos.file_line is None else pos.file_line
+        tpos = ThreadPos(info.num, line_loc, file_line)
+        log.write(tpos.to_str(self.srcdir) + '\n')
 
     def random_thread(self) -> int:
         weights = [t.sched_weight for t in self.threads]
