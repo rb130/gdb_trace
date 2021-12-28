@@ -15,19 +15,20 @@ if __name__ == "__main__":
         config = json.load(f)
 
     curdir = os.path.abspath(os.path.dirname(__file__))
-    tracer_path = os.path.join(curdir, "tracer.py")
+    converter_path = os.path.join(curdir, "converter.py")
 
     timeout = config.get("timeout", None)
     gdb_cwd = config.get("cwd", None)
 
     environ = os.environ.copy()
-    environ["TRACE_CONFIG"] = os.path.abspath(config_path)
+    environ["CONVERT_CONFIG"] = os.path.abspath(config_path)
     environ["PYTHONPATH"] = ':'.join([curdir, os.path.join(curdir, "gdb_utils")]) \
         + os.getenv("PYTHONPATH", "")
 
     try:
-        proc = subprocess.Popen(["gdb", "-q", "-nx", "--readnow", "-x", tracer_path],
-                                env=environ, cwd=gdb_cwd, stdin=subprocess.DEVNULL)
+        proc = subprocess.Popen(["gdb", "-q", "-nx", "--readnow", "-x", converter_path],
+                                env=environ, cwd=gdb_cwd)
+                                #stdin=subprocess.DEVNULL)
         proc.wait(timeout)
     except subprocess.TimeoutExpired:
         proc.terminate()

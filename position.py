@@ -142,7 +142,7 @@ class ThreadPos:
         self.line_loc = line_loc
         self.file_line = file_line
 
-    def to_str(self, srcdir: str) -> str:
+    def to_str(self, srcdir: Optional[str] = None) -> str:
         if self.file_line is None:
             file_line = None
         else:
@@ -150,7 +150,7 @@ class ThreadPos:
         return "%d %s %s" % (self.tid, self.line_loc.value, file_line)
 
 
-def parse_log_line(line: str, srcdir: str) -> Optional[ThreadPos]:
+def parse_log_line(line: str) -> Optional[ThreadPos]:
     match = log_pattern.match(line)
     if match is None:
         return None
@@ -159,7 +159,7 @@ def parse_log_line(line: str, srcdir: str) -> Optional[ThreadPos]:
     if match.group(3) == "None":
         file_line = None
     else:
-        filename = os.path.join(srcdir, match.group(4))
+        filename = match.group(4)
         lineno = int(match.group(5))
         file_line = FileLine(filename, lineno, 0)
     return ThreadPos(tid, line_loc, file_line)
