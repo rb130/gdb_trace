@@ -219,12 +219,8 @@ def main():
     tracer, log = from_config(config_path)
     tracer.start()
     # tracer.update_log(log)
-    cnt = 0
     while tracer.step():
         tracer.update_log(log)
-        cnt += 1
-        if cnt == 20:
-            break
     log.close()
 
 
