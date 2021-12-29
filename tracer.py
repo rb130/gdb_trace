@@ -42,7 +42,6 @@ class Tracer:
         self.srcdir = srcdir
         self.step_timeout = step_timeout
         self.new_thread = SafeInt(0)
-        self.only_multithread = False
         self.go_deeper = 1.0
 
     def start(self):
@@ -154,8 +153,7 @@ class Tracer:
         info.thread.switch()
         tid = info.thread.global_num
 
-        if not self.only_multithread or \
-                any(t.thread.is_valid() for t in self.threads if t != info):
+        if any(t.thread.is_valid() for t in self.threads if t != info):
             if tid in self.new_tids:
                 cmd = "step"
                 self.new_tids.remove(tid)
@@ -164,7 +162,7 @@ class Tracer:
             else:
                 cmd = "next"
         else:
-            cmd = "continue"
+            cmd = "next"
 
         try:
             gdb_execute_timeout(cmd, self.step_timeout)
@@ -209,7 +207,6 @@ def from_config(config_path):
     log_path = config["log"]
     log = open(log_path, "w", buffering=1)  # line buffering
     # advanced configs
-    tracer.only_multithread = config.get("only_multithread", False)
     tracer.go_deeper = config.get("go_deeper", 1.0)
     return tracer, log
 
