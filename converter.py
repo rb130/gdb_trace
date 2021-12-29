@@ -55,6 +55,7 @@ class RunResult(Enum):
     Timeout = 1
     Clone = 2
     Exit = 3
+    Error = -1
 
 
 class Converter:
@@ -190,6 +191,9 @@ class Converter:
             gdb_execute_timeout(cmd, self.step_timeout)
         except TimeoutError:
             return RunResult.Timeout
+        except gdb.error:
+            print("gdb error")
+            return RunResult.Error
         if self.inside_clone():
             gdb_execute("stepi")
             self.add_new_thread()
@@ -214,7 +218,7 @@ class Converter:
                 self.append_answer(None)
             elif r == RunResult.Timeout:
                 raise RuntimeError("Timeout without hitting breakpoint %s" % str(file_line))
-            elif r == RunResult.Exit:
+            elif r == RunResult.Exit or r == RunResult.Error:
                 self.append_answer(None)
                 info.move_to(ThreadPos(info.tid, LineLoc.Middle, None), False)
                 break
@@ -223,6 +227,8 @@ class Converter:
                 tpos, _ = thread_position(gdb.selected_thread(), self.positions)
                 file_line = tpos.file_line.relative_to(self.srcdir)
                 info.move_to(ThreadPos(info.tid, LineLoc.Before, file_line), True)
+                break
+            elif r == RunResult.Error:
                 break
 
         if bp.is_valid():
@@ -233,7 +239,7 @@ class Converter:
         while True:
             r = self.run_gdb_cmd("continue")
             self.append_answer(None)
-            if r == RunResult.Exit:
+            if r == RunResult.Exit or r == RunResult.Error:
                 break
         info.move_to(ThreadPos(info.tid, LineLoc.Middle, None), False)
 
@@ -243,7 +249,7 @@ class Converter:
         if r == RunResult.Clone or r == RunResult.Timeout:
             self.append_answer(None)
             info.into_middle()
-        elif r == RunResult.Exit:
+        elif r == RunResult.Exit or r == RunResult.Error:
             self.append_answer(None)
             info.move_to(ThreadPos(info.tid, LineLoc.Middle, None), False)
         elif r == RunResult.Success:
@@ -257,7 +263,7 @@ class Converter:
         info = self.cur_info
         r = self.run_gdb_cmd("finish")
         assert info.line_loc == LineLoc.Middle
-        if r == RunResult.Clone or r == RunResult.Exit:
+        if r == RunResult.Clone or r == RunResult.Exit or r == RunResult.Error:
             self.append_answer(None)
         elif r == RunResult.Timeout:
             pass
