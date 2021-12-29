@@ -114,9 +114,12 @@ class Tracer:
         else:
             pos = info.position
             line_loc = LineLoc.Before if pos.at_line_begin() else LineLoc.Middle
-            file_line = None if pos.file_line is None else pos.file_line
+            if pos.file_line is None:
+                file_line = None
+            else:
+                file_line = pos.file_line.relative_to(self.srcdir)
         tpos = ThreadPos(info.num, line_loc, file_line)
-        log.write(tpos.to_str(self.srcdir) + '\n')
+        log.write(str(tpos) + '\n')
 
     def random_thread(self) -> int:
         weights = [t.sched_weight for t in self.threads]

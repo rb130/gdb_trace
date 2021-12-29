@@ -111,6 +111,10 @@ class Converter:
         gdb_execute("set pagination off")
 
     def _setup_handlers(self):
+        # let program crash on signal
+        signals = ["SIGSEGV", "SIGILL", "SIGABRT"]
+        for sig in signals:
+            gdb_execute("handle %s nostop pass" % sig)
         # stop on new threads
         gdb_execute("catch syscall clone")
 
@@ -124,9 +128,12 @@ class Converter:
         return frame.name() == "clone"
 
     def process_one(self, tpos: ThreadPos):
-        print(tpos.to_str())
+        print(str(tpos))
         info = self.threads[tpos.tid]
         self.cur_info = info
+
+        print("current", str(info.current))
+        print("last", str(info.last_finished))
 
         if not gdb_switch_thread(tpos.tid):
             if tpos.file_line is None or info.file_line is None:
@@ -137,17 +144,17 @@ class Converter:
             raise ValueError("invalid line_loc")
 
         last_match = tpos.file_line == info.last_finished
-        fline_match = tpos.file_line == info.file_line
+        cur_match = tpos.file_line == info.file_line
 
         if info.line_loc == LineLoc.Before:
             if tpos.line_loc == LineLoc.Before:
-                if not fline_match:
+                if not cur_match:
                     self.run_until(tpos.file_line)
                 return
             if tpos.line_loc == LineLoc.Middle:
                 if last_match:
                     return
-                if fline_match:
+                if cur_match:
                     self.run_next()
                 else:
                     self.run_until_and_next(tpos.file_line)
@@ -158,7 +165,7 @@ class Converter:
                 self.run_until(tpos.file_line)
                 return
             if tpos.line_loc == LineLoc.Middle:
-                if fline_match:
+                if cur_match:
                     self.run_finish()
                 else:
                     self.run_until_and_next(tpos.file_line)
@@ -194,22 +201,28 @@ class Converter:
             return
         info = self.cur_info
 
-        bp = gdb.Breakpoint(file_line.to_str(), internal=True, temporary=True)
-        bp.silent = True
+        bp = gdb.Breakpoint(str(file_line), internal=True, temporary=True)
+        # bp.silent = True
+
         while True:
             r = self.run_gdb_cmd("continue")
             if r == RunResult.Clone:
                 self.append_answer(None)
-            elif r == RunResult.Timeout or r == RunResult.Exit:
-                raise RuntimeError("%s without hitting breakpoint %s"
-                                   % (r.name, file_line.to_str()))
+            elif r == RunResult.Timeout:
+                raise RuntimeError("Timeout without hitting breakpoint %s" % str(file_line))
+            elif r == RunResult.Exit:
+                self.append_answer(None)
+                info.move_to(ThreadPos(info.tid, LineLoc.Middle, None), False)
+                break
             elif r == RunResult.Success:
                 self.append_answer(read_reg("pc"))
+                tpos, _ = thread_position(gdb.selected_thread(), self.positions)
+                file_line = tpos.file_line.relative_to(self.srcdir)
+                info.move_to(ThreadPos(info.tid, LineLoc.Before, file_line), True)
                 break
+
         if bp.is_valid():
             bp.delete()
-
-        info.move_to(ThreadPos(info.tid, LineLoc.Before, file_line), True)
 
     def run_until_exit(self):
         info = self.cur_info
@@ -233,7 +246,8 @@ class Converter:
             tpos, level = thread_position(gdb.selected_thread(), self.positions)
             assert level == 0
             self.append_answer(tpos.pc)
-            info.move_to(ThreadPos(info.tid, LineLoc.Before, tpos.file_line), True)
+            file_line = tpos.file_line.relative_to(self.srcdir)
+            info.move_to(ThreadPos(info.tid, LineLoc.Before, file_line), True)
 
     def run_finish(self):
         info = self.cur_info
@@ -247,7 +261,8 @@ class Converter:
             tpos, level = thread_position(gdb.selected_thread(), self.positions)
             if level == 0:
                 self.append_answer(tpos.pc)
-                info.move_to(ThreadPos(info.tid, LineLoc.Before, tpos.file_line), True)
+                file_line = tpos.file_line.relative_to(self.srcdir)
+                info.move_to(ThreadPos(info.tid, LineLoc.Before, file_line), True)
 
     def run_until_and_next(self, file_line: Optional[FileLine]):
         self.run_until(file_line)

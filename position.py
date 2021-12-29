@@ -10,6 +10,12 @@ import pathlib
 from gdb_utils import *
 
 
+def path_rel_to(path: str, base: str) -> str:
+    base = os.path.abspath(base)
+    path = pathlib.Path(path).relative_to(base)
+    return str(path)
+
+
 class FileLine:
     def __init__(self, filename: str, line: int, address: int):
         self.filename = filename
@@ -29,13 +35,11 @@ class FileLine:
     def __hash__(self):
         return hash(self.filename) ^ self.line
 
-    def to_str(self, srcdir: Optional[str] = None):
-        if srcdir is None:
-            rpath = self.filename
-        else:
-            srcdir = os.path.abspath(srcdir)
-            rpath = pathlib.Path(self.filename).relative_to(srcdir)
-        return "%s:%d" % (rpath, self.line)
+    def relative_to(self, base: str) -> FileLine:
+        return FileLine(path_rel_to(self.filename, base), self.line, self.address)
+
+    def __str__(self):
+        return "%s:%d" % (self.filename, self.line)
 
 
 class LineLoc(Enum):
@@ -142,12 +146,8 @@ class ThreadPos:
         self.line_loc = line_loc
         self.file_line = file_line
 
-    def to_str(self, srcdir: Optional[str] = None) -> str:
-        if self.file_line is None:
-            file_line = None
-        else:
-            file_line = self.file_line.to_str(srcdir)
-        return "%d %s %s" % (self.tid, self.line_loc.value, file_line)
+    def __str__(self):
+        return "%d %s %s" % (self.tid, self.line_loc.value, self.file_line)
 
 
 def parse_log_line(line: str) -> Optional[ThreadPos]:

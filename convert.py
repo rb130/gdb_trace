@@ -27,8 +27,7 @@ if __name__ == "__main__":
 
     try:
         proc = subprocess.Popen(["gdb", "-q", "-nx", "--readnow", "-x", converter_path],
-                                env=environ, cwd=gdb_cwd)
-                                #stdin=subprocess.DEVNULL)
+                                env=environ, cwd=gdb_cwd, stdin=subprocess.DEVNULL)
         proc.wait(timeout)
     except subprocess.TimeoutExpired:
         proc.terminate()
@@ -36,3 +35,5 @@ if __name__ == "__main__":
             proc.wait(1)
         except subprocess.TimeoutExpired:
             proc.kill()
+
+    exit(proc.returncode)
