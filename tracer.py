@@ -67,6 +67,7 @@ class Tracer:
         gdb_execute("set schedule-multiple on")
         gdb_execute("set print finish off")
         gdb_execute("set pagination off")
+        gdb_execute("set step-mode off")
 
     def _setup_breakpoints(self):
         breakpoints = []
@@ -82,7 +83,6 @@ class Tracer:
         gdb.events.new_thread.connect(handler)
 
     def handle_new_threads(self):
-        self.new_tids: Set[int] = set()
         if self.new_thread.fetch() > 0:
             nums = set([t.thread.global_num for t in self.threads if t.thread.is_valid()])
             for thread in gdb.selected_inferior().threads():
@@ -96,6 +96,7 @@ class Tracer:
 
     def _init_threads(self):
         self.threads: List[ThreadInfo] = []
+        self.new_tids: Set[int] = set()
         thread = gdb.selected_thread()
         info = ThreadInfo(thread)
         info.position, _ = thread_position(thread, self.positions)
@@ -121,7 +122,7 @@ class Tracer:
             else:
                 file_line = pos.file_line.relative_to(self.srcdir)
         tpos = ThreadPos(info.num, line_loc, file_line)
-        # print("log", str(tpos), '\n')
+        print("log", str(tpos), '\n')
         log.write(str(tpos) + '\n')
 
     def random_thread(self) -> int:
@@ -151,10 +152,14 @@ class Tracer:
     def try_step(self, thread_index: int) -> bool:
         info = self.threads[thread_index]
         info.thread.switch()
+        tid = info.thread.global_num
 
         if not self.only_multithread or \
                 any(t.thread.is_valid() for t in self.threads if t != info):
-            if info.thread.global_num in self.new_tids or random.random() < self.go_deeper:
+            if tid in self.new_tids:
+                cmd = "step"
+                self.new_tids.remove(tid)
+            elif random.random() < self.go_deeper:
                 cmd = "step"
             else:
                 cmd = "next"
@@ -214,8 +219,12 @@ def main():
     tracer, log = from_config(config_path)
     tracer.start()
     # tracer.update_log(log)
+    cnt = 0
     while tracer.step():
         tracer.update_log(log)
+        cnt += 1
+        if cnt == 20:
+            break
     log.close()
 
 
