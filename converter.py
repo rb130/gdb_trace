@@ -59,12 +59,12 @@ class RunResult(Enum):
 
 
 class Converter:
-    def __init__(self, cmd: List[str], srcdir: str, step_timeout: float):
+    def __init__(self, cmd: List[str], srcdir: str, step_timeout: float, out_path: str):
         self.exe = cmd[0]
         self.args = cmd[1:]
         self.srcdir = srcdir
         self.step_timeout = step_timeout
-        self.answer: List[Tuple[int, int]] = []
+        self.out_file = open(out_path, "w")
 
     def start(self):
         gdb_execute("file -readnow %s" % self.exe)
@@ -181,7 +181,8 @@ class Converter:
         else:
             addr -= self.base_addr
         # print("answer", self.cur_info.tid, hex(addr))
-        self.answer.append((self.cur_info.tid, addr))
+        self.out_file.write("%d: %s\n" % (self.cur_info.tid, hex(addr)))
+        self.out_file.flush()
 
     def run_gdb_cmd(self, cmd: str) -> RunResult:
         thread = gdb.selected_thread()
@@ -227,8 +228,6 @@ class Converter:
                 tpos, _ = thread_position(gdb.selected_thread(), self.positions)
                 file_line = tpos.file_line.relative_to(self.srcdir)
                 info.move_to(ThreadPos(info.tid, LineLoc.Before, file_line), True)
-                break
-            elif r == RunResult.Error:
                 break
 
         if bp.is_valid():
@@ -279,9 +278,8 @@ class Converter:
         if file_line is not None:
             self.run_next()
 
-    def dump_to_file(self, out_file: TextIOWrapper):
-        for ans in self.answer:
-            out_file.write("%d: 0x%x\n" % ans)
+    def close_file(self):
+        self.out_file.close()
 
 
 def from_config(config_path: str):
@@ -290,22 +288,20 @@ def from_config(config_path: str):
     cmd = config["cmd"]
     srcdir = config["srcdir"]
     step_timeout = config.get("steptime", 1.0)
-    converter = Converter(cmd, srcdir, step_timeout)
+    out_path = config["output"]
+    converter = Converter(cmd, srcdir, step_timeout, out_path)
     log_path = config["log"]
     logs = read_log(log_path)
-    out_path = config["output"]
-    out_file = open(out_path, "w")
-    return converter, logs, out_file
+    return converter, logs
 
 
 def main():
     config_path = os.environ["CONVERT_CONFIG"]
-    converter, logs, out_file = from_config(config_path)
+    converter, logs = from_config(config_path)
     converter.start()
     for tpos in logs:
         converter.process_one(tpos)
-    converter.dump_to_file(out_file)
-    out_file.close()
+    converter.close_file()
 
 
 main()
