@@ -82,11 +82,13 @@ class Tracer:
         gdb.events.new_thread.connect(handler)
 
     def handle_new_threads(self):
+        self.new_tids: Set[int] = set()
         if self.new_thread.fetch() > 0:
             nums = set([t.thread.global_num for t in self.threads if t.thread.is_valid()])
             for thread in gdb.selected_inferior().threads():
                 if thread.global_num in nums:
                     continue
+                self.new_tids.add(thread.global_num)
                 info = ThreadInfo(thread)
                 info.position, _ = thread_position(thread, self.positions)
                 self.threads.append(info)
@@ -119,6 +121,7 @@ class Tracer:
             else:
                 file_line = pos.file_line.relative_to(self.srcdir)
         tpos = ThreadPos(info.num, line_loc, file_line)
+        # print("log", str(tpos), '\n')
         log.write(str(tpos) + '\n')
 
     def random_thread(self) -> int:
@@ -151,7 +154,7 @@ class Tracer:
 
         if not self.only_multithread or \
                 any(t.thread.is_valid() for t in self.threads if t != info):
-            if random.random() < self.go_deeper:
+            if info.thread.global_num in self.new_tids or random.random() < self.go_deeper:
                 cmd = "step"
             else:
                 cmd = "next"
