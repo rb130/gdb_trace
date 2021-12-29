@@ -132,8 +132,11 @@ class Converter:
         info = self.threads[tpos.tid]
         self.cur_info = info
 
-        print("current", str(info.current))
-        print("last", str(info.last_finished))
+        # print("current", str(info.current))
+        # print("last", str(info.last_finished))
+
+        if not gdb_live():
+            return
 
         if not gdb_switch_thread(tpos.tid):
             if tpos.file_line is None or info.file_line is None:
@@ -176,6 +179,7 @@ class Converter:
             addr = 0
         else:
             addr -= self.base_addr
+        # print("answer", self.cur_info.tid, hex(addr))
         self.answer.append((self.cur_info.tid, addr))
 
     def run_gdb_cmd(self, cmd: str) -> RunResult:
@@ -202,7 +206,7 @@ class Converter:
         info = self.cur_info
 
         bp = gdb.Breakpoint(str(file_line), internal=True, temporary=True)
-        # bp.silent = True
+        bp.silent = True
 
         while True:
             r = self.run_gdb_cmd("continue")
