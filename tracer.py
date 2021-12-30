@@ -153,16 +153,9 @@ class Tracer:
         info.thread.switch()
         tid = info.thread.global_num
 
-        if any(t.thread.is_valid() for t in self.threads if t != info):
-            if tid in self.new_tids:
-                cmd = "step"
-                self.new_tids.remove(tid)
-            elif random.random() < self.go_deeper:
-                cmd = "step"
-            else:
-                cmd = "next"
-        else:
-            cmd = "next"
+        if tid in self.new_tids:
+            self.new_tids.remove(tid)
+        cmd = "step"
 
         try:
             gdb_execute_timeout(cmd, self.step_timeout)
@@ -179,12 +172,12 @@ class Tracer:
                 return True
 
             if pos.file_line is None:
-                cmds = ["next"]
+                cmds = ["step"]
             else:
                 if level > 0:
                     cmds = ["finish"] * level
                 else:
-                    cmds = ["next"]
+                    cmds = ["step"]
 
             # move out
             for cmd in cmds:
@@ -206,8 +199,6 @@ def from_config(config_path):
     tracer = Tracer(cmd, srcdir, step_timeout)
     log_path = config["log"]
     log = open(log_path, "w", buffering=1)  # line buffering
-    # advanced configs
-    tracer.go_deeper = config.get("go_deeper", 1.0)
     return tracer, log
 
 

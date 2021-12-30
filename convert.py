@@ -21,6 +21,7 @@ if __name__ == "__main__":
     gdb_cwd = config.get("cwd", None)
 
     environ = os.environ.copy()
+    environ["RACEBENCH_STAT"] = "/dev/null"
     environ["CONVERT_CONFIG"] = os.path.abspath(config_path)
     environ["PYTHONPATH"] = ':'.join([curdir, os.path.join(curdir, "gdb_utils")]) \
         + os.getenv("PYTHONPATH", "")
