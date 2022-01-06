@@ -12,7 +12,7 @@ from position import *
 
 class ThreadInfo:
     DefaultSchedWeight = 1.0
-    DropSchedWeight = 0.05
+    DropSchedWeight = 0.1
 
     def __init__(self, thread: gdb.InferiorThread):
         self.thread = thread
@@ -221,10 +221,24 @@ class Tracer:
         str_lines = path_rel_to(filename, self.srcdir) + ": " + str(lines)
         self.black_file.write(str_lines + '\n')
         self.black_file.flush()
+
         func_name = frame.name()
         if func_name is not None:
             gdb_execute("skip " + func_name)
+        if filename not in self.blacklist:
+            self.blacklist[filename] = set()
+        self.blacklist[filename].update(lines)
+
         return True
+
+    def in_blacklist(self, info: ThreadInfo) -> bool:
+        if not info.position.at_line_begin():
+            return False
+        file_line = info.position.file_line
+        filename = file_line.filename
+        if filename not in self.blacklist:
+            return False
+        return file_line.line in self.blacklist[filename]
 
     def try_step(self, thread_index: int) -> bool:
         info = self.threads[thread_index]
@@ -234,7 +248,9 @@ class Tracer:
         if tid in self.new_tids:
             self.new_tids.remove(tid)
 
-        if (self.detect_loop(tid) and random.random() < self.ProbOutLoop):
+        if self.in_blacklist(info):
+            cmd = "finish"
+        elif (self.detect_loop(tid) and random.random() < self.ProbOutLoop):
             if self.add_blacklist(info):
                 cmd = "finish"
             else:
