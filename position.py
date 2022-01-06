@@ -166,6 +166,10 @@ def parse_log_line(line: str) -> Optional[ThreadPos]:
 
 
 def lines_of_function(block) -> List[int]:
+    while block and block.function is None:
+        block = block.superblock
+    if block is None:
+        return []
     symbol = block.function
     symtab = symbol.symtab
     linetable = symtab.linetable()

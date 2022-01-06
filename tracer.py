@@ -4,6 +4,7 @@ import os
 import json
 import random
 import threading
+import math
 
 from gdb_utils import *
 from position import *
@@ -34,8 +35,41 @@ class SafeInt:
             return self.val
 
 
+class PosCount:
+    RecentCnt = 1000
+
+    def __init__(self):
+        self.data: Dict[str, int] = dict()
+        self.log: List[str] = list()
+        self.num = 0
+
+    def add_new(self, loc: str):
+        v = self.data.setdefault(loc, 0)
+        self.data[loc] = v + 1
+        self.log.append(loc)
+        self.num += 1
+        if self.num > self.RecentCnt:
+            self._remove(self.log[-self.num])
+
+    def _remove(self, loc: str):
+        v = self.data[loc]
+        if v == 1:
+            del self.data[loc]
+        else:
+            self.data[loc] = v - 1
+        self.num -= 1
+
+    def values(self):
+        return self.data.values()
+
+    def clear_counter(self):
+        self.data.clear()
+        self.num = 0
+
+
 class Tracer:
     ProbOutLoop = 0.2
+    LoopTheshold = 20
 
     def __init__(self, cmd: List[str], srcdir: str, step_timeout: float, log_path: str, black_path: str):
         self.exe = cmd[0]
@@ -45,7 +79,7 @@ class Tracer:
         self.log = open(log_path, "w")
         self.black_file = open(black_path, "w")
         self.new_thread = SafeInt(0)
-        self.thread_log: Dict[int, List[str]] = dict()
+        self.pos_count: Dict[int, PosCount] = dict()
         self.blacklist: Dict[str, Set[int]] = dict()
 
     def start(self):
@@ -89,14 +123,15 @@ class Tracer:
         if self.new_thread.fetch() > 0:
             nums = set([t.thread.global_num for t in self.threads if t.thread.is_valid()])
             for thread in gdb.selected_inferior().threads():
-                if thread.global_num in nums:
+                tid = thread.global_num
+                if tid in nums:
                     continue
-                self.new_tids.add(thread.global_num)
+                self.new_tids.add(tid)
                 info = ThreadInfo(thread)
                 info.position, _ = thread_position(thread, self.positions)
                 self.threads.append(info)
                 self.new_thread.add(-1)
-                self.thread_log[thread.global_num] = list()
+                self.pos_count[tid] = PosCount()
 
     def _init_threads(self):
         self.threads: List[ThreadInfo] = []
@@ -106,7 +141,7 @@ class Tracer:
         info.position, _ = thread_position(thread, self.positions)
         self.threads.append(info)
         self.last_thread_info = info
-        self.thread_log[thread.global_num] = list()
+        self.pos_count[thread.global_num] = PosCount()
 
     def find_thread_info(self, thread: gdb.InferiorThread) -> ThreadInfo:
         for info in self.threads:
@@ -132,7 +167,7 @@ class Tracer:
         # print("log", str_tpos, '\n')
         self.log.write(str_tpos + '\n')
         self.log.flush()
-        self.thread_log[info.num].append(str_tpos)
+        self.pos_count[info.num].add_new(str_tpos)
 
     def random_thread(self) -> int:
         weights = [t.sched_weight for t in self.threads]
@@ -159,15 +194,19 @@ class Tracer:
         return True
 
     def detect_loop(self, tid: int) -> bool:
-        tlog = self.thread_log.get(tid, [])
-        N = 10
-        K = 6
-        for k in range(1, K):
-            if N * k + k > len(tlog):
-                break
-            if tlog[-N * k:] == tlog[-N * k - k:-k]:
-                return True
-        return False
+        pos_count = self.pos_count.get(tid, None)
+        assert pos_count is not None
+        if pos_count.num < 100:
+            return False
+        entropy = 0.0
+        for val in pos_count.values():
+            p = val / pos_count.num
+            entropy += -p * math.log(p)
+
+        if entropy > math.log(self.LoopTheshold):
+            return False
+        pos_count.clear_counter()
+        return True
 
     def add_blacklist(self, info: ThreadInfo) -> bool:
         if not info.position.at_line_begin():
