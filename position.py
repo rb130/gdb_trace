@@ -163,3 +163,14 @@ def parse_log_line(line: str) -> Optional[ThreadPos]:
         lineno = int(match.group(5))
         file_line = FileLine(filename, lineno, 0)
     return ThreadPos(tid, line_loc, file_line)
+
+
+def lines_of_function(block) -> List[int]:
+    symbol = block.function
+    symtab = symbol.symtab
+    linetable = symtab.linetable()
+    ans = []
+    for item in linetable:
+        if block.start <= item.pc < block.end:
+            ans.append(int(item.line))
+    return ans

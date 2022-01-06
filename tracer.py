@@ -35,14 +35,18 @@ class SafeInt:
 
 
 class Tracer:
+    ProbOutLoop = 0.2
 
-    def __init__(self, cmd: List[str], srcdir: str, step_timeout: float):
+    def __init__(self, cmd: List[str], srcdir: str, step_timeout: float, log_path: str, black_path: str):
         self.exe = cmd[0]
         self.args = cmd[1:]
         self.srcdir = srcdir
         self.step_timeout = step_timeout
+        self.log = open(log_path, "w")
+        self.black_file = open(black_path, "w")
         self.new_thread = SafeInt(0)
-        self.go_deeper = 1.0
+        self.thread_log: Dict[int, List[str]] = dict()
+        self.blacklist: Dict[str, Set[int]] = dict()
 
     def start(self):
         gdb_execute("file -readnow %s" % self.exe)
@@ -92,6 +96,7 @@ class Tracer:
                 info.position, _ = thread_position(thread, self.positions)
                 self.threads.append(info)
                 self.new_thread.add(-1)
+                self.thread_log[thread.global_num] = list()
 
     def _init_threads(self):
         self.threads: List[ThreadInfo] = []
@@ -101,6 +106,7 @@ class Tracer:
         info.position, _ = thread_position(thread, self.positions)
         self.threads.append(info)
         self.last_thread_info = info
+        self.thread_log[thread.global_num] = list()
 
     def find_thread_info(self, thread: gdb.InferiorThread) -> ThreadInfo:
         for info in self.threads:
@@ -108,7 +114,7 @@ class Tracer:
                 return info
         raise ValueError
 
-    def update_log(self, log):
+    def update_log(self):
         info = self.last_thread_info
         if not info.thread.is_valid():
             line_loc = LineLoc.Middle
@@ -120,9 +126,13 @@ class Tracer:
                 file_line = None
             else:
                 file_line = pos.file_line.relative_to(self.srcdir)
+
         tpos = ThreadPos(info.num, line_loc, file_line)
-        print("log", str(tpos), '\n')
-        log.write(str(tpos) + '\n')
+        str_tpos = str(tpos)
+        # print("log", str_tpos, '\n')
+        self.log.write(str_tpos + '\n')
+        self.log.flush()
+        self.thread_log[info.num].append(str_tpos)
 
     def random_thread(self) -> int:
         weights = [t.sched_weight for t in self.threads]
@@ -148,6 +158,43 @@ class Tracer:
         self.last_thread_info = info
         return True
 
+    def detect_loop(self, tid: int) -> bool:
+        tlog = self.thread_log.get(tid, [])
+        N = 10
+        K = 6
+        for k in range(1, K):
+            if N * k + k > len(tlog):
+                break
+            if tlog[-N * k:] == tlog[-N * k - k:-k]:
+                return True
+        return False
+
+    def add_blacklist(self, info: ThreadInfo) -> bool:
+        if not info.position.at_line_begin():
+            return False
+        file_line = info.position.file_line
+        filename = file_line.filename
+        frame = gdb.newest_frame()
+        if frame.name() == "main":
+            return False
+        lines = lines_of_function(frame.block())
+        str_lines = path_rel_to(filename, self.srcdir) + ": " + str(lines)
+        self.black_file.write(str_lines + '\n')
+        self.black_file.flush()
+        if filename not in self.blacklist:
+            self.blacklist[filename] = set()
+        self.blacklist[filename].update(lines)
+        return True
+
+    def in_blacklist(self, info: ThreadInfo) -> bool:
+        if not info.position.at_line_begin():
+            return False
+        file_line = info.position.file_line
+        filename = file_line.filename
+        if filename not in self.blacklist:
+            return False
+        return file_line.line in self.blacklist[filename]
+
     def try_step(self, thread_index: int) -> bool:
         info = self.threads[thread_index]
         info.thread.switch()
@@ -155,12 +202,23 @@ class Tracer:
 
         if tid in self.new_tids:
             self.new_tids.remove(tid)
-        cmd = "step"
+
+        if self.in_blacklist(info):
+            cmd = "finish"
+        elif (self.detect_loop(tid) and random.random() < self.ProbOutLoop):
+            if self.add_blacklist(info):
+                cmd = "finish"
+            else:
+                cmd = "step"
+        else:
+            cmd = "step"
 
         try:
             gdb_execute_timeout(cmd, self.step_timeout)
         except TimeoutError:
             info.position, _ = thread_position(info.thread, self.positions)
+            return False
+        except gdb.error:
             return False
 
         while True:
@@ -189,6 +247,10 @@ class Tracer:
                     info.position, _ = thread_position(info.thread, self.positions)
                     return False
 
+    def close_files(self):
+        self.log.close()
+        self.black_file.close()
+
 
 def from_config(config_path):
     with open(config_path) as f:
@@ -196,20 +258,19 @@ def from_config(config_path):
     cmd = config["cmd"]
     srcdir = config["srcdir"]
     step_timeout = config.get("steptime", 1.0)
-    tracer = Tracer(cmd, srcdir, step_timeout)
     log_path = config["log"]
-    log = open(log_path, "w", buffering=1)  # line buffering
-    return tracer, log
+    black_path = config["blacklist"]
+    tracer = Tracer(cmd, srcdir, step_timeout, log_path, black_path)
+    return tracer
 
 
 def main():
     config_path = os.environ["TRACE_CONFIG"]
-    tracer, log = from_config(config_path)
+    tracer = from_config(config_path)
     tracer.start()
-    # tracer.update_log(log)
     while tracer.step():
-        tracer.update_log(log)
-    log.close()
+        tracer.update_log()
+    tracer.close_files()
 
 
 main()
