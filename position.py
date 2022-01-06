@@ -80,6 +80,7 @@ def load_line_table(srcdir: str) -> List[FileLine]:
                 continue
             _file_name = match.group(1)
             if not file_in_folder(_file_name, srcdir):
+                gdb_execute("skip -file %s" % _file_name)
                 continue
             file_name = _file_name
         elif line.startswith("INDEX "):
@@ -173,8 +174,8 @@ def lines_of_function(block) -> List[int]:
     symbol = block.function
     symtab = symbol.symtab
     linetable = symtab.linetable()
-    ans = []
+    ans = set()
     for item in linetable:
         if block.start <= item.pc < block.end:
-            ans.append(int(item.line))
-    return ans
+            ans.add(int(item.line))
+    return list(ans)
