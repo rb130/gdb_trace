@@ -261,6 +261,7 @@ class Tracer:
                 cmd = "step"
         else:
             cmd = "step"
+        # gdb_execute("bt", show=True)
 
         try:
             gdb_execute_timeout(cmd, self.step_timeout)

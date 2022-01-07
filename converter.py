@@ -152,8 +152,9 @@ class Converter:
 
         if info.line_loc == LineLoc.Before:
             if tpos.line_loc == LineLoc.Before:
+                if cur_match and not last_match:
+                    return
                 self.run_until(tpos.file_line)
-                return
             if tpos.line_loc == LineLoc.Middle:
                 if last_match:
                     return
@@ -185,8 +186,9 @@ class Converter:
 
     def run_gdb_cmd(self, cmd: str) -> RunResult:
         thread = gdb.selected_thread()
-        if not thread.is_valid():
+        if thread is None or not thread.is_valid():
             return RunResult.Exit
+        # gdb_execute("bt", show=True)
         try:
             gdb_execute_timeout(cmd, self.step_timeout)
         except TimeoutError:
