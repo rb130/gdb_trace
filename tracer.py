@@ -248,8 +248,10 @@ class Tracer:
         if tid in self.new_tids:
             self.new_tids.remove(tid)
 
+        need_log = False
         if not any(t.thread.is_valid() for t in self.threads if t != info):
             cmd = "continue"
+            need_log = True
         elif self.in_blacklist(info):
             cmd = "finish"
         elif (self.detect_loop(tid) and random.random() < self.ProbOutLoop):
@@ -268,7 +270,6 @@ class Tracer:
         except gdb.error:
             return False
 
-        first = True
         while True:
             if not info.thread.is_valid():
                 return False
@@ -277,10 +278,10 @@ class Tracer:
             if pos.at_line_begin():
                 return True
             else:
-                if first:
+                if need_log:
                     self.last_thread_info = info
                     self.update_log()
-                    first = False
+                    need_log = False
 
             if pos.file_line is None:
                 cmds = ["step"]
