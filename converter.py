@@ -25,6 +25,7 @@ class ThreadInfo:
     def __init__(self, current: ThreadPos, last_finished: Optional[FileLine]):
         self.current = current
         self.last_finished = last_finished
+        self.last_bad = False
 
     @property
     def tid(self) -> int:
@@ -157,13 +158,20 @@ class Converter:
             raise ValueError("invalid line_loc")
 
         if not self.is_good_position(tpos.file_line):
+            if not info.last_bad:
+                self.run_until(tpos.file_line)
+            info.last_bad = True
             return
+        else:
+            info.last_bad = False
 
         last_match = tpos.file_line == info.last_finished
         cur_match = tpos.file_line == info.file_line
 
         if info.line_loc == LineLoc.Before:
             if tpos.line_loc == LineLoc.Before:
+                if cur_match and not last_match:
+                    return
                 self.run_until(tpos.file_line)
             if tpos.line_loc == LineLoc.Middle:
                 if last_match:
