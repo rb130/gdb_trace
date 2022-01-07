@@ -152,8 +152,7 @@ class Converter:
 
         if info.line_loc == LineLoc.Before:
             if tpos.line_loc == LineLoc.Before:
-                if not cur_match:
-                    self.run_until(tpos.file_line)
+                self.run_until(tpos.file_line)
                 return
             if tpos.line_loc == LineLoc.Middle:
                 if last_match:

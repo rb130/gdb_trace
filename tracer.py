@@ -272,9 +272,12 @@ class Tracer:
             if not info.thread.is_valid():
                 return False
             pos, level = thread_position(info.thread, self.positions)
+            info.position = pos
             if pos.at_line_begin():
-                info.position = pos
                 return True
+            else:
+                self.last_thread_info = info
+                self.update_log()
 
             if pos.file_line is None:
                 cmds = ["step"]
