@@ -268,6 +268,7 @@ class Tracer:
         except gdb.error:
             return False
 
+        first = True
         while True:
             if not info.thread.is_valid():
                 return False
@@ -276,8 +277,10 @@ class Tracer:
             if pos.at_line_begin():
                 return True
             else:
-                self.last_thread_info = info
-                self.update_log()
+                if first:
+                    self.last_thread_info = info
+                    self.update_log()
+                    first = False
 
             if pos.file_line is None:
                 cmds = ["step"]
