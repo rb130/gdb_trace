@@ -248,7 +248,9 @@ class Tracer:
         if tid in self.new_tids:
             self.new_tids.remove(tid)
 
-        if self.in_blacklist(info):
+        if not any(t.thread.is_valid() for t in self.threads if t != info):
+            cmd = "continue"
+        elif self.in_blacklist(info):
             cmd = "finish"
         elif (self.detect_loop(tid) and random.random() < self.ProbOutLoop):
             if self.add_blacklist(info):
