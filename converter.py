@@ -25,7 +25,6 @@ class ThreadInfo:
     def __init__(self, current: ThreadPos, last_finished: Optional[FileLine]):
         self.current = current
         self.last_finished = last_finished
-        self.last_bad = False
 
     @property
     def tid(self) -> int:
@@ -129,14 +128,17 @@ class Converter:
             return False
         return frame.name() == "clone"
 
-    def is_good_position(self, file_line: Optional[FileLine]) -> bool:
+    def break_position(self, file_line: Optional[FileLine]) -> Optional[FileLine]:
         if file_line is None:
-            return True
+            return None
         filename = os.path.join(self.srcdir, file_line.filename)
         filename = os.path.abspath(filename)
         x = FileLine(filename, file_line.line, 0)
         i = bisect.bisect_left(self.positions, x)
-        return i < len(self.positions) and self.positions[i] == x
+        if i == len(self.positions):
+            return None
+        ans = self.positions[i]
+        return ans.relative_to(self.srcdir)
 
     def process_one(self, tpos: ThreadPos):
         print(str(tpos))
@@ -157,16 +159,8 @@ class Converter:
         if tpos.line_loc == LineLoc.After or info.line_loc == LineLoc.After:
             raise ValueError("invalid line_loc")
 
-        if not self.is_good_position(tpos.file_line):
-            if not info.last_bad:
-                self.run_until(tpos.file_line)
-            info.last_bad = True
-            return
-        else:
-            info.last_bad = False
-
         last_match = tpos.file_line == info.last_finished
-        cur_match = tpos.file_line == info.file_line
+        cur_match = self.break_position(tpos.file_line) == info.file_line
 
         if info.line_loc == LineLoc.Before:
             if tpos.line_loc == LineLoc.Before:
