@@ -25,6 +25,7 @@ class ThreadInfo:
     def __init__(self, current: ThreadPos, last_finished: Optional[FileLine]):
         self.current = current
         self.last_finished = last_finished
+        self.last_target: Optional[FileLine] = None
 
     @property
     def tid(self) -> int:
@@ -99,7 +100,8 @@ class Converter:
         tid = len(self.threads)
         assert tid == thread.global_num
         line_loc = LineLoc.Before if pos.at_line_begin() else LineLoc.Middle
-        tpos = ThreadPos(tid, line_loc, pos.file_line)
+        file_line = None if pos.file_line is None else pos.file_line.relative_to(self.srcdir)
+        tpos = ThreadPos(tid, line_loc, file_line)
         self.threads.append(ThreadInfo(tpos, None))
 
     def _setup_gdb_options(self):
@@ -159,16 +161,20 @@ class Converter:
         if tpos.line_loc == LineLoc.After or info.line_loc == LineLoc.After:
             raise ValueError("invalid line_loc")
 
-        last_match = tpos.file_line == info.last_finished
         cur_match = self.break_position(tpos.file_line) == info.file_line
+        last_target = info.last_target
+        info.last_target = tpos.file_line
 
         if info.line_loc == LineLoc.Before:
             if tpos.line_loc == LineLoc.Before:
-                if cur_match and not last_match:
-                    return
+                if cur_match:
+                    if last_target is not None and tpos.file_line is not None \
+                            and last_target.filename == tpos.file_line.filename \
+                            and last_target.line < tpos.file_line.line:
+                        return
                 self.run_until(tpos.file_line)
             if tpos.line_loc == LineLoc.Middle:
-                if last_match:
+                if tpos.file_line == info.last_finished:
                     return
                 if cur_match:
                     self.run_next()
