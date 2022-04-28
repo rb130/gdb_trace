@@ -1,6 +1,5 @@
 from __future__ import annotations
 from enum import Enum
-from io import TextIOWrapper
 import gdb
 import json
 
